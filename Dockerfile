@@ -33,7 +33,7 @@ FROM scratch
 LABEL org.opencontainers.image.authors="Piotr Pręciuk <101650@pollub.edu.pl>" \
       org.opencontainers.image.title="zad-01-weather" \
       org.opencontainers.image.description="Aplikacja pogodowa (kraj/miasto -> Open-Meteo)" \
-      org.opencontainers.image.source="https://github.com/pr3civk/zad-01-weather" \
+      org.opencontainers.image.source="https://github.com/pr3civk/weather-api-fetcher-go" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="1.0.0"
 

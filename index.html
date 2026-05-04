@@ -1,126 +1,209 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pl">
-<head>
-<meta charset="utf-8">
-<title>Pogoda — zad-01</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  * { box-sizing: border-box; }
-  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; max-width: 480px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; background: #f5f6f8; }
-  h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
-  .sub { color: #666; font-size: 0.85rem; margin-bottom: 1.5rem; }
-  form { display: grid; gap: 0.75rem; background: #fff; padding: 1rem; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-  label { font-size: 0.8rem; color: #555; display: block; margin-bottom: 0.25rem; }
-  select, button { font: inherit; padding: 0.55rem 0.75rem; border: 1px solid #ccc; border-radius: 6px; background: #fff; width: 100%; }
-  button { background: #1a73e8; color: #fff; border-color: #1a73e8; cursor: pointer; font-weight: 500; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  #result { margin-top: 1rem; padding: 1rem; background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: none; }
-  #result.show { display: block; }
-  .row { display: flex; justify-content: space-between; padding: 0.35rem 0; border-bottom: 1px solid #f0f0f0; font-size: 0.95rem; }
-  .row:last-child { border: 0; }
-  .label-k { color: #666; }
-  .value { font-weight: 500; }
-  .err { color: #c0392b; }
-  .temp { font-size: 2.2rem; font-weight: 600; }
-  .desc { color: #555; margin-bottom: 0.75rem; }
-</style>
-</head>
-<body>
-  <h1>Pogoda</h1>
-  <div class="sub">zad-01 · Open-Meteo · Piotr Pręciuk</div>
-  <form id="f">
-    <div>
-      <label for="country">Kraj</label>
-      <select id="country" required></select>
-    </div>
-    <div>
-      <label for="city">Miasto</label>
-      <select id="city" required></select>
-    </div>
-    <button type="submit" id="go">Sprawdź pogodę</button>
-  </form>
-  <div id="result"></div>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pogoda — zad-01</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+        max-width: 480px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #1a1a1a;
+        background: #f5f6f8;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin: 0 0 0.25rem;
+      }
+      .sub {
+        color: #666;
+        font-size: 0.85rem;
+        margin-bottom: 1.5rem;
+      }
+      form {
+        display: grid;
+        gap: 0.75rem;
+        background: #fff;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      }
+      label {
+        font-size: 0.8rem;
+        color: #555;
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+      select,
+      button {
+        font: inherit;
+        padding: 0.55rem 0.75rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fff;
+        width: 100%;
+      }
+      button {
+        background: #1a73e8;
+        color: #fff;
+        border-color: #1a73e8;
+        cursor: pointer;
+        font-weight: 500;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #result {
+        margin-top: 1rem;
+        padding: 1rem;
+        background: #fff;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        display: none;
+      }
+      #result.show {
+        display: block;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.35rem 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 0.95rem;
+      }
+      .row:last-child {
+        border: 0;
+      }
+      .label-k {
+        color: #666;
+      }
+      .value {
+        font-weight: 500;
+      }
+      .err {
+        color: #c0392b;
+      }
+      .temp {
+        font-size: 2.2rem;
+        font-weight: 600;
+      }
+      .desc {
+        color: #555;
+        margin-bottom: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pogoda</h1>
+    <div class="sub">zad-01 · Open-Meteo · Piotr Pręciuk</div>
+    <form id="f">
+      <div>
+        <label for="country">Kraj</label>
+        <select id="country" required></select>
+      </div>
+      <div>
+        <label for="city">Miasto</label>
+        <select id="city" required></select>
+      </div>
+      <button type="submit" id="go">Sprawdź pogodę</button>
+    </form>
+    <div id="result"></div>
 
-<script>
-const country = document.getElementById('country');
-const city = document.getElementById('city');
-const form = document.getElementById('f');
-const btn = document.getElementById('go');
-const out = document.getElementById('result');
-let data = {};
+    <script>
+      const country = document.getElementById("country");
+      const city = document.getElementById("city");
+      const form = document.getElementById("f");
+      const btn = document.getElementById("go");
+      const out = document.getElementById("result");
+      let data = {};
 
-(async () => {
-  const r = await fetch('/api/locations');
-  data = await r.json();
-  for (const c of Object.keys(data).sort()) {
-    const o = document.createElement('option');
-    o.value = c;
-    o.textContent = c;
-    country.appendChild(o);
-  }
-  refreshCities();
-})();
+      (async () => {
+        const r = await fetch("/api/locations");
+        data = await r.json();
+        for (const c of Object.keys(data).sort()) {
+          const o = document.createElement("option");
+          o.value = c;
+          o.textContent = c;
+          country.appendChild(o);
+        }
+        refreshCities();
+      })();
 
-country.addEventListener('change', refreshCities);
+      country.addEventListener("change", refreshCities);
 
-function refreshCities() {
-  city.replaceChildren();
-  const cities = data[country.value] || {};
-  for (const c of Object.keys(cities).sort()) {
-    const o = document.createElement('option');
-    o.value = c;
-    o.textContent = c;
-    city.appendChild(o);
-  }
-}
+      function refreshCities() {
+        city.replaceChildren();
+        const cities = data[country.value] || {};
+        for (const c of Object.keys(cities).sort()) {
+          const o = document.createElement("option");
+          o.value = c;
+          o.textContent = c;
+          city.appendChild(o);
+        }
+      }
 
-function row(label, value) {
-  const div = document.createElement('div');
-  div.className = 'row';
-  const k = document.createElement('span');
-  k.className = 'label-k';
-  k.textContent = label;
-  const v = document.createElement('span');
-  v.className = 'value';
-  v.textContent = value;
-  div.append(k, v);
-  return div;
-}
+      function row(label, value) {
+        const div = document.createElement("div");
+        div.className = "row";
+        const k = document.createElement("span");
+        k.className = "label-k";
+        k.textContent = label;
+        const v = document.createElement("span");
+        v.className = "value";
+        v.textContent = value;
+        div.append(k, v);
+        return div;
+      }
 
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text != null) e.textContent = text;
-  return e;
-}
+      function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text;
+        return e;
+      }
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  btn.disabled = true;
-  out.classList.remove('show');
-  out.replaceChildren();
-  try {
-    const u = '/api/weather?country=' + encodeURIComponent(country.value) + '&city=' + encodeURIComponent(city.value);
-    const r = await fetch(u);
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'błąd ' + r.status);
-    out.append(
-      el('div', 'temp', j.temperature + ' °C'),
-      el('div', 'desc', j.description),
-      row('Odczuwalna', j.apparent + ' °C'),
-      row('Wilgotność', j.humidity + ' %'),
-      row('Wiatr', j.wind + ' km/h'),
-      row('Lokalizacja', j.city + ', ' + j.country),
-      row('Pomiar', j.time),
-    );
-    out.classList.add('show');
-  } catch (err) {
-    out.append(el('div', 'err', 'Błąd: ' + err.message));
-    out.classList.add('show');
-  } finally {
-    btn.disabled = false;
-  }
-});
-</script>
-</body>
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        btn.disabled = true;
+        out.classList.remove("show");
+        out.replaceChildren();
+        try {
+          const u =
+            "/api/weather?country=" +
+            encodeURIComponent(country.value) +
+            "&city=" +
+            encodeURIComponent(city.value);
+          const r = await fetch(u);
+          const j = await r.json();
+          if (!r.ok) throw new Error(j.error || "błąd " + r.status);
+          out.append(
+            el("div", "temp", j.temperature + " °C"),
+            el("div", "desc", j.description),
+            row("Odczuwalna", j.apparent + " °C"),
+            row("Wilgotność", j.humidity + " %"),
+            row("Wiatr", j.wind + " km/h"),
+            row("Lokalizacja", j.city + ", " + j.country),
+            row("Pomiar", j.time),
+          );
+          out.classList.add("show");
+        } catch (err) {
+          out.append(el("div", "err", "Błąd: " + err.message));
+          out.classList.add("show");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    </script>
+  </body>
 </html>

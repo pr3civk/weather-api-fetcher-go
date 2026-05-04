@@ -5,8 +5,8 @@
 
 ## Linki
 
-- **GitHub:** `https://github.com/<user>/<repo>` _(uzupełnij)_
-- **DockerHub:** `https://hub.docker.com/r/<user>/zad-01-weather` _(uzupełnij)_
+- **GitHub:** https://github.com/pr3civk/weather-api-fetcher-go
+- **DockerHub:** https://hub.docker.com/r/precivk69/wather-app-go
 
 ## Opis
 
@@ -176,7 +176,7 @@ FROM scratch
 LABEL org.opencontainers.image.authors="Piotr Pręciuk <101650@pollub.edu.pl>" \
       org.opencontainers.image.title="zad-01-weather" \
       org.opencontainers.image.description="Aplikacja pogodowa (kraj/miasto -> Open-Meteo)" \
-      org.opencontainers.image.source="https://github.com/pr3civk/zad-01-weather" \
+      org.opencontainers.image.source="https://github.com/pr3civk/weather-api-fetcher-go" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.version="1.0.0"
 
