@@ -26,7 +26,7 @@ dev:
 	go run .
 
 build:
-	docker build -t $(IMAGE):$(TAG) .
+	docker build --provenance=false -t $(IMAGE):$(TAG) .
 
 run: stop
 	docker run -d --name $(NAME) -p $(PORT):6767 $(IMAGE):$(TAG)

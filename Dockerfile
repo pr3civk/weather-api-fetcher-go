@@ -4,6 +4,7 @@
 # Etap 1 — builder: kompilacja statycznej binarki Go
 # ============================================================
 FROM golang:1.23-alpine AS builder
+RUN apk add --no-cache upx
 WORKDIR /src
 
 # go.mod osobno → dzieki cache `go mod download` nie powtarza sie przy zmianie kodu
@@ -14,9 +15,11 @@ RUN go mod download
 COPY *.go index.html locations.json ./
 
 # CGO_ENABLED=0 → fully static; -s -w usuwa symbole/debug; -trimpath usuwa sciezki budowy
+# UPX --best --lzma → kompresja binarki (~6MB -> ~2MB), self-extracting przy starcie
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w" -trimpath \
-    -o /out/server .
+    -o /out/server . && \
+    upx --best --lzma /out/server
 
 # ============================================================
 # Etap 2 — certs: tylko CA bundle (potrzebny do HTTPS Open-Meteo)
@@ -40,6 +43,10 @@ LABEL org.opencontainers.image.authors="Piotr Pręciuk <101650@pollub.edu.pl>" \
 # CA bundle (HTTPS) i binarka — kazda warstwa to jeden COPY = minimalna liczba warstw fs
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /out/server /server
+
+# nieuprzywilejowany user (UID:GID 10001) — bez /etc/passwd (scratch obsluguje numeryczne ID)
+# port 6767 > 1024, wiec nie wymaga CAP_NET_BIND_SERVICE
+USER 10001:10001
 
 EXPOSE 6767
 

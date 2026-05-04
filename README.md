@@ -183,8 +183,10 @@ LABEL org.opencontainers.image.authors="Piotr Pręciuk <101650@pollub.edu.pl>" \
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /out/server /server
 
-ENV PORT=8080
-EXPOSE 8080
+# nieuprzywilejowany user (UID:GID 10001) — scratch obsluguje numeryczne ID bez /etc/passwd
+USER 10001:10001
+
+EXPOSE 6767
 
 # scratch nie ma curl/wget → healthcheck wykonuje sama binarka z flaga -healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=3s --retries=3 \
@@ -202,8 +204,11 @@ ENTRYPOINT ["/server"]
 | **`CGO_ENABLED=0`** | binarka w pełni statyczna — działa na `scratch` bez libc |
 | **`-ldflags="-s -w"`** | usuwa tablicę symboli i DWARF debug → ~30% mniej |
 | **`-trimpath`** | usuwa lokalne ścieżki budowy → reproducible build |
-| **Base `scratch`** | brak shella, libc, package managera → ~6-8 MB total |
+| **Base `scratch`** | brak shella, libc, package managera |
+| **UPX `--best --lzma`** | kompresja binarki Go z ~6 MB → ~2 MB (self-extracting przy starcie) |
+| **`--provenance=false`** | wyłącza attestation manifest BuildKit (~2 MB oszczędności w obrazie) |
 | **Healthcheck via flag** | `scratch` nie ma curl/wget → sama binarka robi GET /health |
+| **`USER 10001:10001`** | aplikacja nie biegnie jako root (defense-in-depth) — port 6767 > 1024 nie wymaga uprawnień |
 | **OCI labels** | `org.opencontainers.image.authors` zgodny ze standardem |
 | **`//go:embed`** | UI w binarce → 1 plik w obrazie zamiast `/server + /static/...` |
 | **`.dockerignore`** | wyklucza `.git`, `*.md`, `Makefile` z build context — szybszy build |
@@ -251,7 +256,12 @@ docker inspect zad-01-weather:1.0 --format '{{len .RootFS.Layers}}'
 docker history zad-01-weather:1.0
 ```
 
-Oczekiwany rozmiar: **~7-9 MB**. Liczba warstw fs: **2** (CA bundle + binarka).
+Aktualny rozmiar: **~3.7 MB**. Liczba warstw fs: **2** (CA bundle + binarka skompresowana UPX).
+
+Build z `--provenance=false` (bez attestation manifestu, oszczędność ~2 MB):
+```bash
+docker build --provenance=false -t zad-01-weather:1.0 .
+```
 
 ### Push do DockerHub _(do wykonania ręcznie)_
 
