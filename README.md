@@ -1,294 +1,54 @@
-# Zadanie 1 — Aplikacja pogodowa w kontenerze Docker
-
-**Autor:** Piotr Pręciuk
-**Stack:** Go (stdlib) + Open-Meteo API + Docker (multi-stage, scratch)
+Zadanie 1 - Aplikacja pogodowa w kontenerze Docker
 
-## Linki
-
-- **GitHub:** https://github.com/pr3civk/weather-api-fetcher-go
-- **DockerHub:** https://hub.docker.com/r/precivk69/wather-app-go
-
-## Opis
-
-Aplikacja webowa: użytkownik wybiera kraj (Polska / Francja / Chiny) i miasto z predefiniowanej listy (`locations.json`), klika „Sprawdź pogodę" — backend (Go) odpytuje Open-Meteo API i zwraca aktualną temperaturę, odczuwalną, wilgotność, prędkość wiatru oraz opis pogody (mapowanie kodów WMO na PL).
-
-Cele:
-- log startowy (data, autor, port) widoczny w `docker logs`,
-- minimalny obraz Docker (scratch, statyczna binarka Go),
-- multi-stage build z cache modułów,
-- HEALTHCHECK realizowany bez `curl`/`wget` (sama binarka jako self-check via flag),
-- OCI labels.
+Autor: Piotr Pręciuk
+Stack: Go (sama biblioteka standardowa) plus Open-Meteo API plus Docker (multi-stage, scratch)
 
-## Struktura
-
-```
-zad-01/
-├── go.mod
-├── main.go         — serwer HTTP + flag -healthcheck + log startowy
-├── locations.json  — predefiniowana lista miast (Polska, lat/lon)
-├── index.html      — UI (embedded w binarkę przez //go:embed)
-├── Dockerfile      — multi-stage build, base scratch
-├── .dockerignore
-├── Makefile        — targety: build/run/logs/size/layers/push
-└── README.md       — sprawozdanie (ten plik)
-```
-
----
-
-## 1. Aplikacja (max 30%)
-
-### Funkcjonalność
+Linki do projektu:
+GitHub: https://github.com/pr3civk/weather-api-fetcher-go
+DockerHub: https://hub.docker.com/r/precivk69/wather-app-go
 
-- **1a. Log startowy:** `log.Printf("started_at=... author=... port=...")` — widoczny w `docker logs`.
-- **1b. Wybór lokalizacji + pogoda:** dwa cascading `<select>` (kraj → miasto, lista z `locations.json`), backend proxy do Open-Meteo, wyświetla temperaturę, odczuwalną, wilgotność, wiatr, opis.
 
-### `main.go`
+Opis aplikacji
 
-```go
-package main
+Aplikacja jest prostym serwerem webowym napisanym w Go. Użytkownik wchodzi przez przeglądarkę na stronę, wybiera kraj (do wyboru są Polska, Francja i Chiny), następnie wybiera miasto z predefiniowanej listy zapisanej w pliku locations.json i klika przycisk "Sprawdź pogodę". Backend napisany w Go odpytuje wtedy publiczne API Open-Meteo i zwraca aktualną temperaturę, temperaturę odczuwalną, wilgotność powietrza, prędkość wiatru oraz tekstowy opis pogody. Opis powstaje przez zmapowanie kodów WMO zwracanych przez API na polskie nazwy.
 
-import (
-	"context"
-	_ "embed"
-	"encoding/json"
-	"errors"
-	"flag"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"net/url"
-	"os"
-	"strconv"
-	"time"
-)
 
-//go:embed index.html
-var indexHTML []byte
+Struktura projektu
 
-//go:embed locations.json
-var locationsJSON []byte
+W katalogu zad-01 znajdują się następujące pliki. Plik go.mod to plik modułu Go. Plik main.go zawiera kod serwera HTTP, obsługę flagi -healthcheck oraz log startowy. Plik locations.json zawiera predefiniowaną listę miast z koordynatami geograficznymi. Plik index.html to interfejs użytkownika, wbudowany do binarki przez dyrektywę go:embed. Dockerfile zawiera multi-stage build kończący się obrazem scratch. Plik .dockerignore wylistowuje pliki wyłączone z kontekstu builda. Makefile zawiera skróty do najważniejszych komend takich jak build, run, logs, size, layers i push. README.md to to sprawozdanie.
 
-// kraj -> miasto -> [latitude, longitude]; ladowane z locations.json przy starcie
-var locations map[string]map[string][2]float64
-
-const author = "Piotr Pręciuk"
 
-func main() {
-	// flaga -healthcheck pozwala uzyc tej samej binarki jako healthcheck w scratch
-	healthFlag := flag.Bool("healthcheck", false, "wewnetrzny healthcheck: GET /health -> exit 0/1")
-	flag.Parse()
-
-	if err := json.Unmarshal(locationsJSON, &locations); err != nil {
-		log.Fatalf("locations.json: %v", err)
-	}
-
-	port := getPort()
-
-	if *healthFlag {
-		os.Exit(runHealthcheck(port))
-	}
+Aplikacja
 
-	// log startowy (1a): data, autor, port
-	log.SetFlags(0)
-	log.Printf("started_at=%s author=%q port=%d",
-		time.Now().UTC().Format(time.RFC3339), author, port)
+W kodzie main.go używam log.Printf żeby wypisać linię w stylu started_at=... author=... port=..., która pojawia się na standardowym wyjściu kontenera i jest dostępna z zewnątrz przez docker logs. Dzięki temu po starcie kontenera od razu widać datę uruchomienia, autora i numer portu na którym serwer nasłuchuje.
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", handleIndex)
-	mux.HandleFunc("/health", handleHealth)
-	mux.HandleFunc("/api/locations", handleLocations)
-	mux.HandleFunc("/api/weather", handleWeather)
 
-	srv := &http.Server{
-		Addr:              ":" + strconv.Itoa(port),
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("server error: %v", err)
-	}
-}
-```
-
-(pełna wersja: `main.go` w repo — handlery, fetcher Open-Meteo, mapa kodów WMO→PL)
-
-### `locations.json`
-
-Predefiniowana lista miast (PL) — embedowana do binarki przez `//go:embed`:
-
-```json
-{
-  "Polska":  { "Warszawa": [52.23, 21.01], "Kraków": [50.06, 19.94], ... },
-  "Francja": { "Paryż":    [48.86,  2.35], "Lyon":   [45.76,  4.84], ... },
-  "Chiny":   { "Pekin":    [39.90,116.41], "Szanghaj":[31.23,121.47], ... }
-}
-```
-
-(pełna wersja w `locations.json` — 10 miast PL, 5 FR, 5 CN)
+W main.go najważniejsze rzeczy to wbudowanie plików index.html i locations.json do binarki przez go:embed, obsługa flagi -healthcheck (jeśli flaga jest ustawiona to zamiast startować serwer, binarka wykonuje GET na /health i kończy się odpowiednim kodem wyjścia), log startowy, oraz zarejestrowanie czterech handlerów - na stronę główną, /health, /api/locations i /api/weather.
 
-### Open-Meteo API
-
-```
-GET https://api.open-meteo.com/v1/forecast
-    ?latitude=<lat>&longitude=<lon>
-    &current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m
-    &timezone=auto
-```
+Plik locations.json zawiera słownik kraj na miasto.
 
-Bez klucza, bez rejestracji — idealne pod kontener bez sekretów.
+Dockerfile
 
----
+Dockerfile ma trzy etapy. 
+- Pierwszy etap to builder oparty na obrazie golang:1.23-alpine. W nim najpierw kopiuję sam plik go.mod i wykonuję go mod download, a dopiero potem kopiuję pliki źródłowe. Następnie wywołuję go build z flagami CGO_ENABLED=0 i GOOS=linux żeby binarka była w pełni statyczna, oraz z ldflags -s -w które usuwają tablicę symboli i sekcje debug DWARF (zmniejsza to plik o około 30 procent), oraz -trimpath który usuwa lokalne ścieżki budowy z binarki. Na koniec etapu builder uruchamiam UPX z opcjami --best --lzma żeby skompresować binarkę.
 
-## 2. Dockerfile (max 50%)
+Drugi etap to certs, czyli bardzo mały obraz alpine, w którym instaluję tylko pakiet ca-certificates. Potrzebuję bowiem certyfikatów CA do tego, żeby z poziomu obrazu scratch dało się wykonać HTTPS do api.open-meteo.com.
 
-```dockerfile
-# syntax=docker/dockerfile:1.7
+Trzeci etap to obraz oparty na scratch, czyli pustym obrazie bez żadnego systemu operacyjnego. Kopiuję do niego tylko dwa pliki. Ustawiam etykiety OCI (authors, title, description, source, licenses, version), użytkownika niesuperużytkownika 10001:10001, eksponuję port 6767 i konfiguruję HEALTHCHECK który wywołuje samą binarkę z flagą -healthcheck.
 
-# ============================================================
-# Etap 1 — builder: kompilacja statycznej binarki Go
-# ============================================================
-FROM golang:1.23-alpine AS builder
-WORKDIR /src
+Komendy
 
-# go.mod osobno → cache `go mod download` przezywa zmiany kodu
-COPY go.mod ./
-RUN go mod download
+Build obrazu wykonuje się komendą docker build --provenance=false -t zad-01-weather:1.0 . w katalogu z Dockerfile.
 
-COPY *.go index.html locations.json ./
+Uruchomienie kontenera odbywa się komendą docker run -d --name weather -p 6767:6767 zad-01-weather:1.0. Aplikacja jest wtedy dostępna pod adresem http://localhost:6767. Mapuję port 6767 z kontenera na port 6767 hosta, kontener startuje w tle z nazwą weather.
 
-# CGO_ENABLED=0 → fully static; -s -w usuwa symbole/debug; -trimpath usuwa sciezki
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" -trimpath \
-    -o /out/server .
+Logi z datą uruchomienia, autorem i portem dostępne są pod docker logs weather. Wynik wygląda mniej więcej tak: started_at=2026-05-04T12:34:56Z author="Piotr Pręciuk" port=6767.
 
-# ============================================================
-# Etap 2 — certs: tylko CA bundle (potrzebny do HTTPS Open-Meteo)
-# ============================================================
-FROM alpine:3.20 AS certs
-RUN apk add --no-cache ca-certificates
+Rozmiar obrazu można sprawdzić przez docker images zad-01-weather:1.0
 
-# ============================================================
-# Etap 3 — final: scratch (najmniejszy mozliwy obraz)
-# ============================================================
-FROM scratch
+Dla wygody zrobiłem Makefile z najważniejszymi targetami. make build wykonuje docker build, make run uruchamia kontener, make logs pokazuje docker logs, make size pokazuje rozmiar obrazu, make layers pokazuje liczbę warstw i historię, make push robi tag i push do DockerHub, a make help wyświetla pełną listę targetów.
 
-LABEL org.opencontainers.image.authors="Piotr Pręciuk <101650@pollub.edu.pl>" \
-      org.opencontainers.image.title="zad-01-weather" \
-      org.opencontainers.image.description="Aplikacja pogodowa (kraj/miasto -> Open-Meteo)" \
-      org.opencontainers.image.source="https://github.com/pr3civk/weather-api-fetcher-go" \
-      org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.version="1.0.0"
 
-COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=builder /out/server /server
+Zrzut ekranu
 
-# nieuprzywilejowany user (UID:GID 10001) — scratch obsluguje numeryczne ID bez /etc/passwd
-USER 10001:10001
-
-EXPOSE 6767
-
-# scratch nie ma curl/wget → healthcheck wykonuje sama binarka z flaga -healthcheck
-HEALTHCHECK --interval=30s --timeout=3s --start-period=3s --retries=3 \
-    CMD ["/server", "-healthcheck"]
-
-ENTRYPOINT ["/server"]
-```
-
-### Optymalizacje
-
-| Technika | Korzyść |
-|---|---|
-| **Multi-stage build (3 etapy)** | builder (golang+toolchain ~300 MB) zostaje w cache, nie trafia do final |
-| **`go.mod` przed `*.go`** | zmiana kodu nie unieważnia warstwy `go mod download` (cache) |
-| **`CGO_ENABLED=0`** | binarka w pełni statyczna — działa na `scratch` bez libc |
-| **`-ldflags="-s -w"`** | usuwa tablicę symboli i DWARF debug → ~30% mniej |
-| **`-trimpath`** | usuwa lokalne ścieżki budowy → reproducible build |
-| **Base `scratch`** | brak shella, libc, package managera |
-| **UPX `--best --lzma`** | kompresja binarki Go z ~6 MB → ~2 MB (self-extracting przy starcie) |
-| **`--provenance=false`** | wyłącza attestation manifest BuildKit (~2 MB oszczędności w obrazie) |
-| **Healthcheck via flag** | `scratch` nie ma curl/wget → sama binarka robi GET /health |
-| **`USER 10001:10001`** | aplikacja nie biegnie jako root (defense-in-depth) — port 6767 > 1024 nie wymaga uprawnień |
-| **OCI labels** | `org.opencontainers.image.authors` zgodny ze standardem |
-| **`//go:embed`** | UI w binarce → 1 plik w obrazie zamiast `/server + /static/...` |
-| **`.dockerignore`** | wyklucza `.git`, `*.md`, `Makefile` z build context — szybszy build |
-
----
-
-## 3. Komendy (max 20%)
-
-### a. Build obrazu
-
-```bash
-docker build -t zad-01-weather:1.0 .
-```
-
-### b. Uruchomienie kontenera
-
-```bash
-docker run -d --name weather -p 6767:6767 zad-01-weather:1.0
-```
-
-Aplikacja dostępna pod `http://localhost:6767`.
-
-### c. Logi (data uruchomienia, autor, port)
-
-```bash
-docker logs weather
-```
-
-Przykładowy wynik:
-```
-started_at=2026-05-04T12:34:56Z author="Piotr Pręciuk" port=6767
-```
-
-### d. Liczba warstw i rozmiar obrazu
-
-```bash
-# rozmiar
-docker images zad-01-weather:1.0
-docker image inspect zad-01-weather:1.0 --format '{{.Size}}'
-
-# liczba warstw fs
-docker inspect zad-01-weather:1.0 --format '{{len .RootFS.Layers}}'
-
-# pelna historia warstw
-docker history zad-01-weather:1.0
-```
-
-Aktualny rozmiar: **~3.7 MB**. Liczba warstw fs: **2** (CA bundle + binarka skompresowana UPX).
-
-Build z `--provenance=false` (bez attestation manifestu, oszczędność ~2 MB):
-```bash
-docker build --provenance=false -t zad-01-weather:1.0 .
-```
-
-### Push do DockerHub _(do wykonania ręcznie)_
-
-```bash
-docker login
-docker tag zad-01-weather:1.0 <dockerhub-user>/zad-01-weather:1.0
-docker tag zad-01-weather:1.0 <dockerhub-user>/zad-01-weather:latest
-docker push <dockerhub-user>/zad-01-weather:1.0
-docker push <dockerhub-user>/zad-01-weather:latest
-```
-
-### Skróty (Makefile)
-
-```bash
-make build      # docker build
-make run        # uruchom kontener
-make logs       # docker logs
-make size       # rozmiar obrazu
-make layers     # liczba warstw + historia
-make push       # tag + push do DockerHub
-make help       # pełna lista targetów
-```
-
----
-
-## Zrzut ekranu
-
-_(wstaw zrzut z `http://localhost:6767` po wybraniu kraju/miasta i kliknięciu "Sprawdź pogodę")_
-
-![screenshot](docs/screenshot.png)
+Zrzut ekranu z działającej aplikacji pod adresem http://localhost:6767 po wybraniu kraju i miasta oraz kliknięciu "Sprawdź pogodę" znajduje się w pliku docs/screenshot.png.
