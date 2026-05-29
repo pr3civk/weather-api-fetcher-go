@@ -6,8 +6,7 @@ Stack: Go (sama biblioteka standardowa) plus Open-Meteo API plus Docker (multi-s
 Linki do projektu:
 GitHub: https://github.com/pr3civk/weather-api-fetcher-go
 DockerHub: https://hub.docker.com/r/precivk69/wather-app-go
-
-
+ 
 Opis aplikacji
 
 Aplikacja jest prostym serwerem webowym napisanym w Go. Użytkownik wchodzi przez przeglądarkę na stronę, wybiera kraj (do wyboru są Polska, Francja i Chiny), następnie wybiera miasto z predefiniowanej listy zapisanej w pliku locations.json i klika przycisk "Sprawdź pogodę". Backend napisany w Go odpytuje wtedy publiczne API Open-Meteo i zwraca aktualną temperaturę, temperaturę odczuwalną, wilgotność powietrza, prędkość wiatru oraz tekstowy opis pogody. Opis powstaje przez zmapowanie kodów WMO zwracanych przez API na polskie nazwy.
