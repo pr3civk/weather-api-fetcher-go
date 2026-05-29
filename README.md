@@ -3,6 +3,7 @@ Zadanie 1 - Aplikacja pogodowa w kontenerze Docker
 Autor: Piotr Pręciuk
 Stack: Go (sama biblioteka standardowa) plus Open-Meteo API plus Docker (multi-stage, scratch)
 
+
 Linki do projektu:
 GitHub: https://github.com/pr3civk/weather-api-fetcher-go
 DockerHub: https://hub.docker.com/r/precivk69/wather-app-go
