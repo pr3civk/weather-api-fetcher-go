@@ -1,0 +1,106 @@
+name: build-scan-push
+
+# Łańcuch CI/CD: buduje multi-arch obraz z Dockerfile (zad-01),
+# skanuje go pod kątem CVE (Docker Scout) i dopiero gdy jest czysty
+# wypycha do publicznego rejestru obrazów na GH
+# Dane z cache'a trzymane są
+# w dedykowanym, publicznym repozytorium na DockerHub.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  # Obraz publiczny
+  IMAGE: ghcr.io/${{ github.repository_owner }}/zad-01-weather
+  # Dedykowane, publiczne repo cache na DockerHub
+  CACHE_REPO: docker.io/${{ vars.DOCKERHUB_USERNAME }}/zad-01-weather-cache
+  # Lokalny tag obrazu  ładowany do daemona tylko na potrzeby skanu CVE
+  SCAN_IMAGE: zad-01-weather:scan
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read       # checkout
+      packages: write       # push do ghcr.io
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login do DockerHub: potrzebny do read i write dla cache'a i
+      # do pobierania bazy podatności przez Docker Scout
+      - name: Login to DockerHub (cache + Scout)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Login do GHCR przy użyciu wbudowanego GITHUB_TOKEN
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tagi obrazu)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+
+      # KROK 1 — build TYLKO amd64, ładowany lokalnie  na potrzeby skanu.
+      # Tu zapisujemy/odczytujemy cache do repo na DockerHub
+      - name: Build (amd64) do skanu + zapis cache
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.SCAN_IMAGE }}
+          provenance: false
+          cache-from: type=registry,ref=${{ env.CACHE_REPO }}:cache-${{ github.ref_name }}
+          cache-to: type=registry,ref=${{ env.CACHE_REPO }}:cache-${{ github.ref_name }},mode=max,image-manifest=true
+
+      # KROK 2 — BRAMKA CVE. Docker Scout. exit-code=true => job pada,
+      # gdy znaleziono podatności o severity critical/high. Skanujemy
+      # obraz lokalny (local://), zbudowany w kroku 1.
+      - name: Skan CVE (Docker Scout) — bramka
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: local://${{ env.SCAN_IMAGE }}
+          only-severity: critical,high
+          exit-code: true
+          dockerhub-user: ${{ vars.DOCKERHUB_USERNAME }}
+          dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # KROK 3 — dopiero po przejściu bramki: build multi-arch
+      # i PUSH do publicznego repo na GHCR. Cache amd64 z kroku 1 jest re-używany,
+      # więc dobudowywana jest głównie warstwa arm64.
+      - name: Build multi-arch + push do GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          cache-from: type=registry,ref=${{ env.CACHE_REPO }}:cache-${{ github.ref_name }}
+          cache-to: type=registry,ref=${{ env.CACHE_REPO }}:cache-${{ github.ref_name }},mode=max,image-manifest=true
