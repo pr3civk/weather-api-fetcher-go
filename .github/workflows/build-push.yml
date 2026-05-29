@@ -85,7 +85,7 @@ jobs:
         with:
           command: cves
           image: local://${{ env.SCAN_IMAGE }}
-          only-severity: critical,high
+          only-severities: critical,high
           exit-code: true
           dockerhub-user: ${{ vars.DOCKERHUB_USERNAME }}
           dockerhub-password: ${{ secrets.DOCKERHUB_TOKEN }}
